@@ -1,0 +1,120 @@
+name: Create Stable Release Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_major_version:
+        description: '要锁定的内核主版本 (例如: 6.1 或 6.6)'
+        required: true
+        type: string
+        default: '6.1'
+
+jobs:
+  create_tag_and_pin_feeds:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 必须给予写权限，才能推送 commit 和 tag
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # 需要获取所有历史记录，以便检查 tag 是否已存在
+          fetch-depth: 0
+
+      - name: Generate Tag, Pin Feeds and Push
+        run: |
+          set -e # 如果任何命令失败，则立即退出脚本
+
+          # 1. ===== 配置基本变量 =====
+          KERNEL_MAJOR_VERSION="${{ github.event.inputs.kernel_major_version }}"
+          KERNEL_VERSION_FILE="target/linux/generic/kernel-${KERNEL_MAJOR_VERSION}"
+          FEEDS_CONFIG="feeds.conf.default"
+          
+          # 定义需要锁定 commit 的 feeds 列表 (仓库名，用空格隔开)
+          # 您可以根据需要修改这个列表
+          FEEDS_TO_PIN="packages luci routing telephony video"
+
+          echo "准备为内核版本 ${KERNEL_MAJOR_VERSION} 创建稳定版 Tag..."
+
+          # 2. ===== 解析内核版本 =====
+          if [ ! -f "$KERNEL_VERSION_FILE" ]; then
+            echo "错误：内核版本文件 '$KERNEL_VERSION_FILE' 不存在！"
+            exit 1
+          fi
+
+          # 从文件中提取补丁版本号, 例如 ".55" -> "55"
+          PATCH_VERSION=$(grep "LINUX_VERSION-${KERNEL_MAJOR_VERSION}" "$KERNEL_VERSION_FILE" | cut -d'=' -f2 | tr -d ' .')
+          if [ -z "$PATCH_VERSION" ]; then
+            echo "错误：无法从 '$KERNEL_VERSION_FILE' 中解析出内核补丁版本号！"
+            exit 1
+          fi
+
+          # 组合成完整的 Tag 名称, 例如 "6.1.55"
+          TAG_NAME="${KERNEL_MAJOR_VERSION}.${PATCH_VERSION}"
+          echo "成功解析内核版本，将要创建的 Tag 为: ${TAG_NAME}"
+
+          # 检查 Tag 是否已存在
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "错误：Tag '${TAG_NAME}' 已经存在，停止操作。"
+            exit 1
+          fi
+
+          # 3. ===== 锁定 Feeds Commit =====
+          echo "开始锁定 feeds.conf.default 中的仓库版本..."
+          TEMP_DIR=$(mktemp -d) # 创建一个临时目录用于克隆
+
+          for feed_name in $FEEDS_TO_PIN; do
+            # 从 feeds.conf.default 中找到对应仓库的 URL
+            FEED_URL=$(grep "src-git ${feed_name} " "$FEEDS_CONFIG" | awk '{print $3}')
+
+            if [ -z "$FEED_URL" ]; then
+              echo "警告：在 ${FEEDS_CONFIG} 中未找到名为 '${feed_name}' 的 feed，跳过。"
+              continue
+            fi
+
+            echo "正在获取 '${feed_name}' (${FEED_URL}) 的最新 commit hash..."
+            
+            # 使用 --depth=1 进行浅克隆，速度更快
+            COMMIT_HASH=$(git ls-remote "$FEED_URL" HEAD | awk '{print $1}')
+
+            if [ -z "$COMMIT_HASH" ]; then
+              echo "警告：无法获取 '${feed_name}' 的 commit hash，跳过。"
+              continue
+            fi
+
+            echo "获取到 ${feed_name} 的 commit hash: ${COMMIT_HASH}"
+
+            # 使用 sed 命令更新 feeds.conf.default 文件
+            # 使用 | 作为分隔符，避免与 URL 中的 / 冲突
+            # 这个命令会找到包含 "src-git feed_name URL" 的行，并在 URL 后面追加 "^commit_hash"
+            sed -i "s|^\(src-git ${feed_name} ${FEED_URL}\)$|\1^${COMMIT_HASH}|" "$FEEDS_CONFIG"
+          done
+
+          rm -rf "$TEMP_DIR" # 清理临时目录
+          echo "所有指定的 feeds 已成功锁定版本。"
+          echo "更新后的 feeds.conf.default 内容："
+          cat "$FEEDS_CONFIG"
+
+          # 4. ===== Git 提交与推送 =====
+          echo "配置 Git 用户..."
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          # 检查是否有文件变动（只有 feeds.conf.default 变动了才需要提交）
+          if git diff --quiet "$FEEDS_CONFIG"; then
+            echo "feeds.conf.default 文件没有变化，无需提交。"
+          else
+            echo "提交 feeds.conf.default 的更改..."
+            git add "$FEEDS_CONFIG"
+            git commit -m "chore: Pin feeds for release ${TAG_NAME}" -m "Locked package versions based on kernel ${TAG_NAME}."
+          fi
+
+          echo "创建并推送 Tag: ${TAG_NAME}"
+          git tag -a "${TAG_NAME}" -m "Release ${TAG_NAME}"
+          
+          # 推送 commit 和 tag 到当前分支
+          git push origin HEAD
+          git push origin "${TAG_NAME}"
+
+          echo "工作流执行完毕！"
