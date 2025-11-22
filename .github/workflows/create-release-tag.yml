@@ -7,7 +7,7 @@ on:
         description: '要锁定的内核主版本 (例如: 6.1 或 6.6)'
         required: true
         type: string
-        default: '6.1'
+        default: '6.12'
 
 jobs:
   create_tag_and_pin_feeds:
