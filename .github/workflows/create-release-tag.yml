@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       kernel_major_version:
-        description: '要锁定的内核主版本 (例如: 6.1 或 6.6)'
+        description: '内核主版本'
         required: true
         type: string
         default: '6.12'
@@ -29,9 +29,11 @@ jobs:
           KERNEL_MAJOR_VERSION="${{ github.event.inputs.kernel_major_version }}"
           KERNEL_VERSION_FILE="target/linux/generic/kernel-${KERNEL_MAJOR_VERSION}"
           FEEDS_CONFIG="feeds.conf.default"
-          # 定义需要锁定 commit 的 feeds 列表
           FEEDS_TO_PIN="packages luci routing telephony video"
+          # 获取当前触发工作流的分支名称 (例如 k6.12-nss)
+          CURRENT_BRANCH="${GITHUB_REF#refs/heads/}"
 
+          echo "当前运行分支: ${CURRENT_BRANCH}"
           echo "准备为内核版本 ${KERNEL_MAJOR_VERSION} 创建稳定版 Tag..."
 
           # 2. ===== 解析内核版本 =====
@@ -40,9 +42,7 @@ jobs:
             exit 1
           fi
           
-          # 提取补丁版本
           PATCH_VERSION=$(grep "LINUX_VERSION-${KERNEL_MAJOR_VERSION}" "$KERNEL_VERSION_FILE" | cut -d'=' -f2 | tr -d ' .')
-          
           if [ -z "$PATCH_VERSION" ]; then
             echo "错误：无法从 '$KERNEL_VERSION_FILE' 中解析出内核补丁版本号！"
             exit 1
@@ -51,67 +51,72 @@ jobs:
           TAG_NAME="${KERNEL_MAJOR_VERSION}.${PATCH_VERSION}"
           echo "成功解析内核版本，将要创建的 Tag 为: ${TAG_NAME}"
 
-          # 检查 tag 是否已存在
-          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-            echo "错误：Tag '${TAG_NAME}' 已经存在，停止操作。"
+          # 检查 Tag 是否在远程已存在
+          if git ls-remote --exit-code --tags origin "$TAG_NAME" >/dev/null 2>&1; then
+            echo "错误：Tag '${TAG_NAME}' 在远程仓库已经存在，停止操作。"
             exit 1
           fi
 
-          # 3. ===== 锁定 Feeds Commit (已修正逻辑) =====
+          # 3. ===== 锁定 Feeds Commit =====
           echo "开始锁定 feeds.conf.default 中的仓库版本..."
 
           for feed_name in $FEEDS_TO_PIN; do
-            # 从 feeds.conf.default 中找到包含该 feed 的行
             FEED_LINE=$(grep "^src-git ${feed_name} " "$FEEDS_CONFIG")
 
             if [ -z "$FEED_LINE" ]; then
-              echo "警告：在 ${FEEDS_CONFIG} 中未找到名为 '${feed_name}' 的 feed，跳过。"
+              echo "警告：未找到名为 '${feed_name}' 的 feed，跳过。"
               continue
             fi
             
-            # 提取纯净的 URL，通过 cut 命令去除可能存在的 "^commit_hash" 部分
+            # 提取纯净 URL
             CLEAN_URL=$(echo "$FEED_LINE" | awk '{print $3}' | cut -d'^' -f1)
-
-            echo "正在获取 '${feed_name}' (${CLEAN_URL}) 的最新 commit hash..."
+            echo "正在获取 '${feed_name}' 的最新 commit hash..."
             
             COMMIT_HASH=$(git ls-remote "$CLEAN_URL" HEAD | awk '{print $1}')
 
             if [ -z "$COMMIT_HASH" ]; then
-              echo "警告：无法获取 '${feed_name}' 的 commit hash，跳过。"
+              echo "警告：无法获取 hash，跳过。"
               continue
             fi
 
-            echo "获取到 ${feed_name} 的 commit hash: ${COMMIT_HASH}"
+            echo "Hash: ${COMMIT_HASH}"
             
-            # 构造新的行内容
             NEW_LINE="src-git ${feed_name} ${CLEAN_URL}^${COMMIT_HASH}"
-            
-            # 使用 sed 整行替换
             sed -i "s|^src-git ${feed_name} .*|${NEW_LINE}|" "$FEEDS_CONFIG"
           done
 
-          echo "所有指定的 feeds 已成功锁定版本。"
-          echo "更新后的 feeds.conf.default 内容："
-          cat "$FEEDS_CONFIG"
+          echo "feeds.conf.default 更新完成。"
 
-          # 4. ===== Git 提交与推送 =====
+          # 4. ===== Git 提交、同步与推送 =====
           echo "配置 Git 用户..."
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
+          # 检查是否有变更
           if git diff --quiet "$FEEDS_CONFIG"; then
-            echo "feeds.conf.default 文件没有变化，无需提交。"
+            echo "文件无变化。"
           else
-            echo "提交 feeds.conf.default 的更改..."
+            echo "提交更改..."
             git add "$FEEDS_CONFIG"
-            git commit -m "chore: Pin feeds for release ${TAG_NAME}" -m "Locked package versions based on kernel ${TAG_NAME}."
+            git commit -m "chore: Pin feeds for release ${TAG_NAME}"
           fi
 
-          echo "创建并推送 Tag: ${TAG_NAME}"
-          git tag -a "${TAG_NAME}" -m "Release ${TAG_NAME}"
+          # === 关键修复：在推送前拉取最新的远程代码并变基 ===
+          echo "正在同步远程代码 (Git Pull Rebase)..."
+          git pull --rebase origin "$CURRENT_BRANCH"
+
+          # 再次检查 Tag 是否因为拉取代码而存在了
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+             echo "警告：Pull之后发现 Tag 已存在，跳过打标签。"
+          else
+             echo "创建本地 Tag: ${TAG_NAME}"
+             git tag -a "${TAG_NAME}" -m "Release ${TAG_NAME}"
+          fi
           
-          # 推送 commit 和 tag
-          git push origin HEAD
+          echo "推送到远程..."
+          # 推送当前分支
+          git push origin HEAD:"refs/heads/${CURRENT_BRANCH}"
+          # 推送 Tag
           git push origin "${TAG_NAME}"
 
-          echo "工作流执行完毕！"
+          echo "工作流执行完毕！SUCCESS"
