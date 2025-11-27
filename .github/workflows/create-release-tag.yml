@@ -1,4 +1,4 @@
-name: Create Release Tag
+name: Create Stable Release Tag
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
         description: '要锁定的内核主版本 (例如: 6.1 或 6.6)'
         required: true
         type: string
-        default: '6.12'
+        default: '6.1'
 
 jobs:
   create_tag_and_pin_feeds:
@@ -29,6 +29,7 @@ jobs:
           KERNEL_MAJOR_VERSION="${{ github.event.inputs.kernel_major_version }}"
           KERNEL_VERSION_FILE="target/linux/generic/kernel-${KERNEL_MAJOR_VERSION}"
           FEEDS_CONFIG="feeds.conf.default"
+          # 定义需要锁定 commit 的 feeds 列表
           FEEDS_TO_PIN="packages luci routing telephony video"
 
           echo "准备为内核版本 ${KERNEL_MAJOR_VERSION} 创建稳定版 Tag..."
@@ -38,27 +39,32 @@ jobs:
             echo "错误：内核版本文件 '$KERNEL_VERSION_FILE' 不存在！"
             exit 1
           fi
+          
+          # 提取补丁版本
           PATCH_VERSION=$(grep "LINUX_VERSION-${KERNEL_MAJOR_VERSION}" "$KERNEL_VERSION_FILE" | cut -d'=' -f2 | tr -d ' .')
+          
           if [ -z "$PATCH_VERSION" ]; then
             echo "错误：无法从 '$KERNEL_VERSION_FILE' 中解析出内核补丁版本号！"
             exit 1
           fi
+          
           TAG_NAME="${KERNEL_MAJOR_VERSION}.${PATCH_VERSION}"
           echo "成功解析内核版本，将要创建的 Tag 为: ${TAG_NAME}"
 
+          # 检查 tag 是否已存在
           if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
             echo "错误：Tag '${TAG_NAME}' 已经存在，停止操作。"
             exit 1
           fi
 
-          # 3. ===== 锁定 Feeds Commit (已更新逻辑) =====
+          # 3. ===== 锁定 Feeds Commit (已修正逻辑) =====
           echo "开始锁定 feeds.conf.default 中的仓库版本..."
 
           for feed_name in $FEEDS_TO_PIN; do
             # 从 feeds.conf.default 中找到包含该 feed 的行
             FEED_LINE=$(grep "^src-git ${feed_name} " "$FEEDS_CONFIG")
 
-            if [ -z "$FEED_LINE" ]; HASH
+            if [ -z "$FEED_LINE" ]; then
               echo "警告：在 ${FEEDS_CONFIG} 中未找到名为 '${feed_name}' 的 feed，跳过。"
               continue
             fi
@@ -80,8 +86,7 @@ jobs:
             # 构造新的行内容
             NEW_LINE="src-git ${feed_name} ${CLEAN_URL}^${COMMIT_HASH}"
             
-            # 使用 sed 命令，找到以 "src-git <feed_name>" 开头的行，并将其整行替换为新的内容
-            # 这样无论旧行后面有没有 commit hash，都可以被正确替换
+            # 使用 sed 整行替换
             sed -i "s|^src-git ${feed_name} .*|${NEW_LINE}|" "$FEEDS_CONFIG"
           done
 
@@ -105,6 +110,7 @@ jobs:
           echo "创建并推送 Tag: ${TAG_NAME}"
           git tag -a "${TAG_NAME}" -m "Release ${TAG_NAME}"
           
+          # 推送 commit 和 tag
           git push origin HEAD
           git push origin "${TAG_NAME}"
 
