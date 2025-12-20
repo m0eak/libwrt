@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write # 需要这个权限来删除旧的工作流记录哦
 
     steps:
       - name: Checkout repository
@@ -30,11 +31,10 @@ jobs:
           KERNEL_VERSION_FILE="target/linux/generic/kernel-${KERNEL_MAJOR_VERSION}"
           FEEDS_CONFIG="feeds.conf.default"
           FEEDS_TO_PIN="packages luci routing telephony video"
-          # 获取当前分支
           CURRENT_BRANCH="${GITHUB_REF#refs/heads/}"
 
           echo "🐱 当前运行分支: ${CURRENT_BRANCH}"
-          echo "🐱 准备为内核版本 ${KERNEL_MAJOR_VERSION} 创建稳定版 Tag..."
+          echo "🐱 准备为内核版本 ${KERNEL_MAJOR_VERSION} 更新稳定版 Tag..."
 
           # 2. ===== 解析内核版本 =====
           if [ ! -f "$KERNEL_VERSION_FILE" ]; then
@@ -49,62 +49,57 @@ jobs:
           fi
           
           TAG_NAME="${KERNEL_MAJOR_VERSION}.${PATCH_VERSION}"
-          echo "✅ 成功解析内核版本，将要创建的 Tag 为: ${TAG_NAME}"
+          echo "✅ 目标 Tag: ${TAG_NAME}"
 
-          if git ls-remote --exit-code --tags origin "$TAG_NAME" >/dev/null 2>&1; then
-            echo "⚠️  错误：Tag '${TAG_NAME}' 在远程仓库已经存在，停止操作。"
-            exit 1
-          fi
-
-          # 3. ===== 锁定 Feeds Commit (支持此时带有 ; 的分支) =====
-          echo "🚀 开始锁定 feeds.conf.default 中的仓库版本..."
+          # 3. ===== 锁定 Feeds Commit (强化版逻辑) =====
+          echo "🚀 开始更新并锁定 feeds.conf.default..."
 
           for feed_name in $FEEDS_TO_PIN; do
             FEED_LINE=$(grep "^src-git ${feed_name} " "$FEEDS_CONFIG")
 
             if [ -z "$FEED_LINE" ]; then
-              echo "⚠️  警告：未找到名为 '${feed_name}' 的 feed，跳过。"
+              echo "⚠️  警告：未找到 '${feed_name}'，跳过。"
               continue
             fi
             
-            # --- 解析逻辑升级 ---
+            # --- 核心解析逻辑：不管原文件里有没有hash，一律清洗干净 ---
             
-            # 1. 获取第三列的原始字符串 (例如: https://...git;branch^hash 或 https://...git;branch)
+            # 1. 拿取整段 URL 字符串 (可能包含 ;branch 和 ^hash)
             RAW_URI=$(echo "$FEED_LINE" | awk '{print $3}')
             
-            # 2. 去除可能存在的旧 hash (保留 URL 和可能存在的 ;branch)
+            # 2. 先切掉 '^' 后面的旧 hash，得到“基准URI” (例如 url 或 url;branch)
             BASE_URI=$(echo "$RAW_URI" | cut -d'^' -f1)
             
-            # 3. 提取纯净的 HTTP URL (去除 ; 后面的部分)
+            # 3. 再切掉 ';' 后面的分支名，得到纯净 URL (用于 git ls-remote)
             REAL_URL=$(echo "$BASE_URI" | cut -d';' -f1)
             
-            # 4. 判断是否有指定分支 (如果有分号，分号后面就是分支名，否则用 HEAD)
+            # 4. 判断有没有指定分支
             if [[ "$BASE_URI" == *";"* ]]; then
               BRANCH_TO_QUERY=$(echo "$BASE_URI" | cut -d';' -f2)
             else
               BRANCH_TO_QUERY="HEAD"
             fi
 
-            echo "🔍 正在获取 '${feed_name}' 的最新 commit..."
-            echo "   👉 URL: $REAL_URL"
-            echo "   👉 分支: $BRANCH_TO_QUERY"
+            echo "🔍 根据 '${feed_name}' 的分支 '$BRANCH_TO_QUERY' 获取最新 Commit..."
             
-            # 使用指定的分支去查询 hash
+            # 5. 去上游抓取最新的 Hash
             COMMIT_HASH=$(git ls-remote "$REAL_URL" "$BRANCH_TO_QUERY" | awk '{print $1}')
 
             if [ -z "$COMMIT_HASH" ]; then
-              echo "😿 警告：无法获取 hash，跳过。"
+              echo "😿 警告：无法从上游获取 hash，跳过更新。"
               continue
             fi
 
-            echo "   ✅ Hash: ${COMMIT_HASH}"
+            echo "   ✅ 最新 Hash: ${COMMIT_HASH}"
             
-            # 5. 构造新行：src-git name url;branch^new_hash
+            # 6. 构造新行：使用清洗后的 BASE_URI + 新的 COMMIT_HASH
             NEW_LINE="src-git ${feed_name} ${BASE_URI}^${COMMIT_HASH}"
+            
+            # 7. 写入文件
             sed -i "s|^src-git ${feed_name} .*|${NEW_LINE}|" "$FEEDS_CONFIG"
           done
 
-          echo "🎉 feeds.conf.default 更新完成。"
+          echo "🎉 Feeds 更新完成。"
 
           # 4. ===== Git 提交、同步与推送 =====
           echo "📝 配置 Git 用户..."
@@ -112,25 +107,45 @@ jobs:
           git config --local user.name "GitHub Action"
 
           if git diff --quiet "$FEEDS_CONFIG"; then
-            echo "💤 文件无变化。"
+            echo "💤 feeds.conf.default 文件内容与上游最新一致，无需提交变更。"
           else
-            echo "💾 提交更改..."
+            echo "💾 发现新版本！提交更改..."
             git add "$FEEDS_CONFIG"
-            git commit -m "chore: Pin feeds for release ${TAG_NAME}"
+            # 这里的 commit message 也可以改改，加上时间戳
+            git commit -m "chore: Update feeds for release ${TAG_NAME}"
           fi
 
           echo "🔄 正在同步远程代码 (Pull Rebase)..."
           git pull --rebase origin "$CURRENT_BRANCH"
 
-          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-             echo "⚠️  Pull之后发现 Tag 已存在，取消打标操作。"
-          else
-             echo "🏷️  创建本地 Tag: ${TAG_NAME}"
-             git tag -a "${TAG_NAME}" -m "Release ${TAG_NAME}"
+          # 5. ===== 强制更新 Tag 逻辑 =====
+          echo "🏷️  处理 Tag..."
+
+          # 检查本地是否有旧 Tag，有则删
+          if git tag -l | grep -q "^${TAG_NAME}$"; then
+             echo "   🧹 删除本地旧 Tag..."
+             git tag -d "${TAG_NAME}"
+          fi
+
+          # 检查远程是否有旧 Tag，有则删
+          if git ls-remote --tags origin | grep -q "refs/tags/${TAG_NAME}"; then
+             echo "   🧹 删除远程旧 Tag..."
+             git push origin --delete "${TAG_NAME}"
           fi
           
+          echo "   ✨ 创建新 Tag: ${TAG_NAME}"
+          git tag -a "${TAG_NAME}" -m "Auto-release ${TAG_NAME} kernel hash"
+
           echo "🚀 推送到远程..."
           git push origin HEAD:"refs/heads/${CURRENT_BRANCH}"
           git push origin "${TAG_NAME}"
 
-          echo "✨ 工作流执行完毕"
+          echo "✅ 完成！"
+
+      - name: Delete older workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 1
+          keep_minimum_runs: 5
