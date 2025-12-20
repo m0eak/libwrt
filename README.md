@@ -96,7 +96,7 @@ rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wg
 #### 3. 下载源码与配置
 ```bash
 # 克隆源码
-git clone --depth 1 --single-branch https://github.com/LiBwrt-op/openwrt-6.x.git libwrt
+git clone -b 25.12-nss --depth 1 --single-branch https://github.com/LiBwrt-op/openwrt-6.x.git libwrt
 cd libwrt
 
 # 更新 feeds
@@ -121,7 +121,7 @@ make -j1 V=s
 cd libwrt
 
 # 拉取最新代码
-git fetch && git reset --hard origin/k6.12-nss
+git fetch && git reset --hard origin/25.12-nss
 
 # 更新 feeds
 ./scripts/feeds update -a && ./scripts/feeds install -a
