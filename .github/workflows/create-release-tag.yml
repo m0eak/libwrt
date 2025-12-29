@@ -4,17 +4,22 @@ on:
   workflow_dispatch:
     inputs:
       kernel_major_version:
-        description: '内核主版本'
+        description: '内核版本'
         required: true
         type: string
         default: '6.12'
+      feeds_branch:
+        description: '使用的 OpenWrt 分支'
+        required: true
+        type: string
+        default: 'openwrt-25.12'
 
 jobs:
   create_tag_and_pin_feeds:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: write # 需要这个权限来删除旧的工作流记录哦
+      actions: write
 
     steps:
       - name: Checkout repository
@@ -28,12 +33,15 @@ jobs:
 
           # 1. ===== 配置基本变量 =====
           KERNEL_MAJOR_VERSION="${{ github.event.inputs.kernel_major_version }}"
+          DEFAULT_FEEDS_BRANCH="${{ github.event.inputs.feeds_branch }}"
+          
           KERNEL_VERSION_FILE="target/linux/generic/kernel-${KERNEL_MAJOR_VERSION}"
           FEEDS_CONFIG="feeds.conf.default"
           FEEDS_TO_PIN="packages luci routing telephony video"
           CURRENT_BRANCH="${GITHUB_REF#refs/heads/}"
 
           echo "🐱 当前运行分支: ${CURRENT_BRANCH}"
+          echo "🐱 锁定目标分支: ${DEFAULT_FEEDS_BRANCH}"
           echo "🐱 准备为内核版本 ${KERNEL_MAJOR_VERSION} 更新稳定版 Tag..."
 
           # 2. ===== 解析内核版本 =====
@@ -51,7 +59,7 @@ jobs:
           TAG_NAME="${KERNEL_MAJOR_VERSION}.${PATCH_VERSION}"
           echo "✅ 目标 Tag: ${TAG_NAME}"
 
-          # 3. ===== 锁定 Feeds Commit (强化版逻辑) =====
+          # 3. ===== 锁定 Feeds Commit =====
           echo "🚀 开始更新并锁定 feeds.conf.default..."
 
           for feed_name in $FEEDS_TO_PIN; do
@@ -62,27 +70,25 @@ jobs:
               continue
             fi
             
-            # --- 核心解析逻辑：不管原文件里有没有hash，一律清洗干净 ---
-            
-            # 1. 拿取整段 URL 字符串 (可能包含 ;branch 和 ^hash)
+            # 1. 获取原始 URI
             RAW_URI=$(echo "$FEED_LINE" | awk '{print $3}')
             
-            # 2. 先切掉 '^' 后面的旧 hash，得到“基准URI” (例如 url 或 url;branch)
-            BASE_URI=$(echo "$RAW_URI" | cut -d'^' -f1)
+            # 2. 剥离 hash 和 ;branch，只留纯URL (https://github.com/....git)
+            BASE_NO_HASH=$(echo "$RAW_URI" | cut -d'^' -f1)
+            REAL_URL=$(echo "$BASE_NO_HASH" | cut -d';' -f1)
             
-            # 3. 再切掉 ';' 后面的分支名，得到纯净 URL (用于 git ls-remote)
-            REAL_URL=$(echo "$BASE_URI" | cut -d';' -f1)
+            # 3. === 确定要查询的分支 ===
             
-            # 4. 判断有没有指定分支
-            if [[ "$BASE_URI" == *";"* ]]; then
-              BRANCH_TO_QUERY=$(echo "$BASE_URI" | cut -d';' -f2)
+            if [[ "$BASE_NO_HASH" == *";"* ]]; then
+              BRANCH_TO_QUERY=$(echo "$BASE_NO_HASH" | cut -d';' -f2)
+              echo "🔍 [${feed_name}] 发现文件内指定分支: $BRANCH_TO_QUERY"
             else
-              BRANCH_TO_QUERY="HEAD"
+              BRANCH_TO_QUERY="$DEFAULT_FEEDS_BRANCH"
+              echo "🔍 [${feed_name}] 文件内无分支信息，使用默认分支: $BRANCH_TO_QUERY"
             fi
-
-            echo "🔍 根据 '${feed_name}' 的分支 '$BRANCH_TO_QUERY' 获取最新 Commit..."
             
-            # 5. 去上游抓取最新的 Hash
+            # 4. 获取对应分支的最新 Hash
+            echo "   👉 正在从 $BRANCH_TO_QUERY 获取最新 Commit..."
             COMMIT_HASH=$(git ls-remote "$REAL_URL" "$BRANCH_TO_QUERY" | awk '{print $1}')
 
             if [ -z "$COMMIT_HASH" ]; then
@@ -90,16 +96,14 @@ jobs:
               continue
             fi
 
-            echo "   ✅ 最新 Hash: ${COMMIT_HASH}"
+            echo "   ✅ 锁定 Hash: ${COMMIT_HASH}"
             
-            # 6. 构造新行：使用清洗后的 BASE_URI + 新的 COMMIT_HASH
-            NEW_LINE="src-git ${feed_name} ${BASE_URI}^${COMMIT_HASH}"
+            NEW_LINE="src-git ${feed_name} ${REAL_URL}^${COMMIT_HASH}"
             
-            # 7. 写入文件
             sed -i "s|^src-git ${feed_name} .*|${NEW_LINE}|" "$FEEDS_CONFIG"
           done
 
-          echo "🎉 Feeds 更新完成。"
+          echo "🎉 Feeds 配置已修正并锁定。"
 
           # 4. ===== Git 提交、同步与推送 =====
           echo "📝 配置 Git 用户..."
@@ -107,36 +111,32 @@ jobs:
           git config --local user.name "GitHub Action"
 
           if git diff --quiet "$FEEDS_CONFIG"; then
-            echo "💤 feeds.conf.default 文件内容与上游最新一致，无需提交变更。"
+            echo "💤 内容无变化，跳过提交。"
           else
-            echo "💾 发现新版本！提交更改..."
+            echo "💾 提交更改..."
             git add "$FEEDS_CONFIG"
-            # 这里的 commit message 也可以改改，加上时间戳
-            git commit -m "chore: Update feeds for release ${TAG_NAME}"
+            git commit -m "chore: Update feeds to ${DEFAULT_FEEDS_BRANCH} latest for ${TAG_NAME}"
           fi
 
-          echo "🔄 正在同步远程代码 (Pull Rebase)..."
+          echo "🔄 同步远程代码..."
           git pull --rebase origin "$CURRENT_BRANCH"
 
-          # 5. ===== 强制更新 Tag 逻辑 =====
+          # 5. ===== 强制更新 Tag =====
           echo "🏷️  处理 Tag..."
 
-          # 检查本地是否有旧 Tag，有则删
           if git tag -l | grep -q "^${TAG_NAME}$"; then
-             echo "   🧹 删除本地旧 Tag..."
              git tag -d "${TAG_NAME}"
           fi
 
-          # 检查远程是否有旧 Tag，有则删
           if git ls-remote --tags origin | grep -q "refs/tags/${TAG_NAME}"; then
              echo "   🧹 删除远程旧 Tag..."
              git push origin --delete "${TAG_NAME}"
           fi
           
           echo "   ✨ 创建新 Tag: ${TAG_NAME}"
-          git tag -a "${TAG_NAME}" -m "Auto-release ${TAG_NAME} kernel hash"
+          git tag -a "${TAG_NAME}" -m "Auto-release ${TAG_NAME} based on ${DEFAULT_FEEDS_BRANCH}"
 
-          echo "🚀 推送到远程..."
+          echo "🚀 推送..."
           git push origin HEAD:"refs/heads/${CURRENT_BRANCH}"
           git push origin "${TAG_NAME}"
 
