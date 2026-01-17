@@ -80,7 +80,7 @@
 +/*
 + * Holds L2TP channel info
 + */
-+struct  pppol2tp_common_addr {
++struct pppol2tp_common_addr {
 +	int tunnel_version;				/* v2 or v3 */
 +	__u32 local_tunnel_id, remote_tunnel_id;	/* tunnel id */
 +	__u32 local_session_id, remote_session_id;	/* session id */
