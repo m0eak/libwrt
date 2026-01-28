@@ -1,4 +1,4 @@
-# Copyright (C) 2006-2012 OpenWrt.org
+﻿# Copyright (C) 2006-2012 OpenWrt.org
 # Copyright (C) 2010 Vertical Communications
 #
 # This is free software, licensed under the GNU General Public License v2.
@@ -198,7 +198,7 @@ if VERSIONOPT
 	config VERSION_REPO
 		string
 		prompt "Release repository"
-		default "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT"
+		default "https://immortalwrt.kyarucloud.moe/releases/25.12-SNAPSHOT/"
 		help
 			This is the repository address embedded in the image, it defaults
 			to the trunk snapshot repo; the url may contain the following placeholders:
