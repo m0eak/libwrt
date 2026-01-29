@@ -108,6 +108,7 @@ ALLWIFIBOARDS:= \
 	zte_mf287plus \
 	zyxel_nbg7815 \
 	zyxel_nwa210ax \
+	zyxel_scr50axe \
 	anysafe_e1 \
 	cmiot_ax18 \
 	jdcloud_re-ss-01 \
@@ -313,5 +314,6 @@ $(eval $(call generate-ipq-wifi-package,redmi_ax5-jdcloud,Redmi AX5 JDCloud))
 $(eval $(call generate-ipq-wifi-package,verizon_cr1000a,Verizon CR1000A))
 $(eval $(call generate-ipq-wifi-package,xiaomi_ax1800,Xiaomi AX1800))
 $(eval $(call generate-ipq-wifi-package,zn_m2,ZN M2))
+$(eval $(call generate-ipq-wifi-package,zyxel_scr50axe,Zyxel SCR50AXE))
 
 $(foreach PACKAGE,$(ALLWIFIPACKAGES),$(eval $(call BuildPackage,$(PACKAGE))))
