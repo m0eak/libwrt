@@ -216,6 +216,11 @@ platform_do_upgrade() {
 		fi
 		emmc_do_upgrade "$1"
 		;;
+	sinseego,fg2000)
+		CI_KERNPART="0:HLOS_1"
+		CI_ROOTPART="rootfs_1"
+		emmc_do_upgrade "$1"
+		;;		
 	verizon,cr1000a)
 		CI_KERNPART="0:HLOS"
 		CI_ROOTPART="rootfs"
@@ -243,6 +248,7 @@ platform_copy_config() {
 	qnap,301w|\
 	spectrum,sax1v1k|\
 	zyxel,nbg7815|\
+	inseego,fg2000|\
 	verizon,cr1000a)
 		emmc_copy_config
 		;;
