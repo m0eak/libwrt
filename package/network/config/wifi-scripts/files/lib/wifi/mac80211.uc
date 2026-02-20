@@ -20,7 +20,7 @@ function radio_exists(path, macaddr, phy, radio) {
 			continue;
 		if (radio != null && int(s.radio) != radio)
 			continue;
-		if (s.macaddr & lc(s.macaddr) == lc(macaddr))
+		if (s.macaddr && lc(s.macaddr) == lc(macaddr))
 			return true;
 		if (s.phy == phy)
 			return true;
@@ -113,6 +113,7 @@ set ${si}.mode='ap'
 set ${si}.ssid='${defaults?.ssid || "LibWrt"}'
 set ${si}.encryption='${defaults?.encryption || encryption}'
 set ${si}.key='${defaults?.key || ""}'
+set ${si}.disabled='${defaults ? 0 : 1}'
 
 `);
 		config[name] = {};
