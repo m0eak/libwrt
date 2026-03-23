@@ -356,8 +356,19 @@ function device_htmode_append(config) {
 		/* supported Channel widths */
 		if (((vht_capab & 0xc) == 4 || (vht_capab & 0xc) == 8) && config.vht160 >= 1)
 			config.vht_capab += '[VHT160]';
-		if ((vht_capab & 0xc) == 8 && config.vht160 >= 2)
-			config.vht_capab += '[VHT160-80PLUS80]';
+
+		/*
+		 * Be conservative with automatic 80+80 advertisement.
+		 *
+		 * On QCN9074/ath11k AP mode, HE160 bring-up can fail when
+		 * wifi-scripts auto-generates both [VHT160] and
+		 * [VHT160-80PLUS80], leading to
+		 * VHT_CAP_SUPP_CHAN_WIDTH_MASK ... (3 > 2).
+		 *
+		 * Keep 160 MHz advertisement, but suppress automatic 80+80
+		 * advertisement until explicit opt-in or driver-specific
+		 * handling is added.
+		 */
 
 		/* maximum MPDU length */
 		if ((vht_capab & 3) > 1 && config.vht_max_mpdu >= 11454)
