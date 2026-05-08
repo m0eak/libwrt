@@ -20,6 +20,7 @@ mediatek_setup_interfaces()
 	nokia,ea0326gmp|\
 	mercusys,mr80x-v3|\
 	routerich,ax3000-v1|\
+	ruijie,rg-x60|\
 	zbtlink,zbt-z8103ax|\
 	zbtlink,zbt-z8103ax-c)
 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3" eth1
@@ -115,6 +116,8 @@ mediatek_setup_interfaces()
 	cudy,ap3000-v1|\
 	cudy,re3000-v1|\
 	kebidumei,ax3000-u22|\
+	keenetic,kap-630|\
+	netcraze,nap-630|\
 	netgear,eax17|\
 	netgear,wax220|\
 	openfi,6c|\
@@ -128,7 +131,8 @@ mediatek_setup_interfaces()
 	bananapi,bpi-r3-mini|\
 	edgecore,eap111|\
 	huasifei,wh3000-emmc|\
-	huasifei,wh3000-pro)
+	huasifei,wh3000-pro-emmc|\
+	huasifei,wh3000-pro-nand)
 		ucidef_set_interfaces_lan_wan eth0 eth1
 		;;
 	bazis,ax3000wm|\
@@ -140,6 +144,7 @@ mediatek_setup_interfaces()
 	glinet,gl-mt2500|\
 	glinet,gl-mt2500-airoha|\
 	glinet,gl-mt3000|\
+	glinet,gl-mt3600be|\
 	glinet,gl-x3000|\
 	glinet,gl-xe3000|\
 	openembed,som7981|\
@@ -211,6 +216,9 @@ mediatek_setup_interfaces()
 	xiaomi,redmi-router-ax6000-ubootmod)
 		ucidef_set_interfaces_lan_wan "lan2 lan3 lan4" wan
 		;;
+	zyxel,wx5600-t0-ubootmod)
+		ucidef_set_interface_lan "lan1 lan2"
+		;;
 	*)
 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" wan
 		;;
@@ -280,11 +288,6 @@ mediatek_setup_macs()
 		lan_mac=$(mtd_get_mac_ascii factory lanMac)
 		wan_mac=$(macaddr_add "$lan_mac" 1)
 		label_mac=$wan_mac
-		;;
-	ruijie,rg-x60-pro)
-		label_mac=$(mtd_get_mac_ascii product_info ethaddr)
-		wan_mac=$label_mac
-		lan_mac=$(macaddr_add "$label_mac" 1)
 		;;
 	tplink,eap683-lr)
 		label_mac=$(get_mac_binary "/tmp/factory/default-mac" 0)
