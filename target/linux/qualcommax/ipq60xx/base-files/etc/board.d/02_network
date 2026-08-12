@@ -12,7 +12,9 @@ ipq60xx_setup_interfaces()
 
 	case "$board" in
 	8devices,mango-dvk|\
-	glinet,gl-axt1800)
+	glinet,gl-axt1800|\
+	link,nn6000-v1|\
+	lg,gapd-7500)
 		ucidef_set_interfaces_lan_wan "lan1 lan2" "wan"
 		;;
 	alfa-network,ap120c-ax)
@@ -21,15 +23,26 @@ ipq60xx_setup_interfaces()
 	cambiumnetworks,xe3-4)
 		ucidef_set_interface_lan "lan1 lan2" "dhcp"
 		;;
+	jdcloud,re-cs-02|\
 	glinet,gl-ax1800|\
 	linksys,mr7350|\
 	linksys,mr7500|\
+	link,nn6000-v2|\
+	kt,ar06-012h|\
 	yuncore,fap650)
 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" "wan"
 		;;
 	netgear,wax214)
 		ucidef_set_interfaces_lan_wan "lan"
 		;;
+	jdcloud,re-ss-01|\
+	jdcloud,re-cs-07|\
+	anysafe,e1|\
+	cmiot,ax18|\
+	redmi,ax5|\
+	redmi,ax5-jdcloud|\
+	xiaomi,ax1800|\
+	zn,m2|\
 	qihoo,360v6)
 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3" "wan"
 		;;

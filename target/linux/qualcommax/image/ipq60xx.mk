@@ -211,7 +211,6 @@ define Device/tplink_eap625-outdoor-hd-v1
 		EAP625-Outdoor HD(TP-Link|CA|AX1800-D):1.0\r\n \
 		EAP625-Outdoor HD(TP-Link|AU|AX1800-D):1.0\r\n \
 		EAP625-Outdoor HD(TP-Link|KR|AX1800-D):1.0
-
 endef
 TARGET_DEVICES += tplink_eap625-outdoor-hd-v1
 
@@ -229,3 +228,167 @@ define Device/yuncore_fap650
 	IMAGE/factory.ubin := append-ubi | qsdk-ipq-factory-nand
 endef
 TARGET_DEVICES += yuncore_fap650
+
+define Device/kt_ar06-012h
+	$(call Device/FitImage)
+	$(call Device/UbiFit)
+	DEVICE_VENDOR := KT
+	DEVICE_MODEL := AR06-012H
+	DEVICE_DTS := ipq6000-kt-ar06-012h
+	BLOCKSIZE := 128k
+	PAGESIZE := 2048
+	SOC := ipq6000
+	DEVICE_DTS_CONFIG := config@cp03-c1
+	DEVICE_PACKAGES := ipq-wifi-kt_ar06-012h
+endef
+TARGET_DEVICES += kt_ar06-012h
+
+define Device/lg_gapd-7500
+	$(call Device/FitImage)
+	$(call Device/UbiFit)
+	DEVICE_VENDOR := LG
+	DEVICE_MODEL := GAPD-7500
+  DEVICE_DTS := ipq6000-lg-gapd-7500
+	BLOCKSIZE := 128k
+	PAGESIZE := 2048
+	SOC := ipq6000
+	DEVICE_DTS_CONFIG := config@cp03-c1
+	DEVICE_PACKAGES := ipq-wifi-lg_gapd-7500 kmod-switch-rtl8367b
+endef
+TARGET_DEVICES += lg_gapd-7500
+
+define Device/anysafe_e1
+	$(call Device/FitImage)
+	$(call Device/UbiFit)
+	DEVICE_VENDOR := AnySafe
+	DEVICE_MODEL := E1
+	BLOCKSIZE := 128k
+	PAGESIZE := 2048
+	SOC := ipq6010
+	DEVICE_DTS_CONFIG := config@cp01-c3
+	DEVICE_PACKAGES := ipq-wifi-anysafe_e1 ath11k-firmware-qcn9074 kmod-hwmon-pwmfan
+endef
+TARGET_DEVICES += anysafe_e1
+
+define Device/cmiot_ax18
+	$(call Device/FitImage)
+	$(call Device/UbiFit)
+	DEVICE_VENDOR := CMIOT
+	DEVICE_MODEL := AX18
+	BLOCKSIZE := 128k
+	PAGESIZE := 2048
+	SOC := ipq6000
+	DEVICE_DTS_CONFIG := config@cp03-c1
+	DEVICE_PACKAGES := ipq-wifi-cmiot_ax18
+endef
+TARGET_DEVICES += cmiot_ax18
+
+define Device/redmi_ax5
+	$(call Device/FitImage)
+	$(call Device/UbiFit)
+	DEVICE_VENDOR := Redmi
+	DEVICE_MODEL := AX5
+	BLOCKSIZE := 128k
+	PAGESIZE := 2048
+	SOC := ipq6000
+	DEVICE_DTS_CONFIG := config@cp03-c1
+	DEVICE_PACKAGES := ipq-wifi-redmi_ax5
+endef
+TARGET_DEVICES += redmi_ax5
+
+define Device/xiaomi_ax1800
+	$(call Device/FitImage)
+	$(call Device/UbiFit)
+	DEVICE_VENDOR := Xiaomi
+	DEVICE_MODEL := AX1800
+	BLOCKSIZE := 128k
+	PAGESIZE := 2048
+	SOC := ipq6000
+	DEVICE_DTS_CONFIG := config@cp03-c1
+	DEVICE_PACKAGES := ipq-wifi-xiaomi_ax1800
+endef
+TARGET_DEVICES += xiaomi_ax1800
+
+define Device/zn_m2
+	$(call Device/FitImage)
+	$(call Device/UbiFit)
+	DEVICE_VENDOR := ZN
+	DEVICE_MODEL := M2
+	BLOCKSIZE := 128k
+	PAGESIZE := 2048
+	SOC := ipq6000
+	DEVICE_DTS_CONFIG := config@cp03-c1
+	DEVICE_PACKAGES := ipq-wifi-zn_m2
+endef
+TARGET_DEVICES += zn_m2
+
+define Device/redmi_ax5-jdcloud
+	$(call Device/FitImage)
+	$(call Device/EmmcImage)
+	DEVICE_VENDOR := Redmi
+	DEVICE_MODEL := AX5 JDCloud
+	KERNEL_SIZE := 6144k
+	SOC := ipq6000
+	DEVICE_DTS_CONFIG := config@cp03-c1
+	DEVICE_PACKAGES := ipq-wifi-redmi_ax5-jdcloud
+	IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-rootfs | pad-rootfs | pad-to 64k
+endef
+TARGET_DEVICES += redmi_ax5-jdcloud
+
+define Device/link_nn6000-v1
+	$(call Device/FitImage)
+	$(call Device/EmmcImage)
+	DEVICE_VENDOR := Link
+	DEVICE_MODEL := NN6000 v1
+	KERNEL_SIZE := 6144k
+	SOC := ipq6000
+	DEVICE_DTS_CONFIG := config@cp03-c1
+	DEVICE_PACKAGES := ipq-wifi-link_nn6000
+	IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-rootfs | append-metadata
+endef
+TARGET_DEVICES += link_nn6000-v1
+
+define Device/link_nn6000-v2
+	$(Device/link_nn6000-v1)
+	DEVICE_MODEL := NN6000 v2
+endef
+TARGET_DEVICES += link_nn6000-v2
+
+define Device/jdcloud_re-ss-01
+	$(call Device/FitImage)
+	$(call Device/EmmcImage)
+	DEVICE_VENDOR := JDCloud
+	DEVICE_MODEL := RE-SS-01
+	KERNEL_SIZE := 6144k
+	SOC := ipq6000
+	DEVICE_DTS_CONFIG := config@cp03-c2
+	DEVICE_PACKAGES := ipq-wifi-jdcloud_re-ss-01
+	IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-rootfs | append-metadata
+endef
+TARGET_DEVICES += jdcloud_re-ss-01
+
+define Device/jdcloud_re-cs-02
+	$(call Device/FitImage)
+	$(call Device/EmmcImage)
+	DEVICE_VENDOR := JDCloud
+	DEVICE_MODEL := RE-CS-02
+	KERNEL_SIZE := 6144k
+	SOC := ipq6010
+	DEVICE_DTS_CONFIG := config@cp03-c3
+	DEVICE_PACKAGES := ipq-wifi-jdcloud_re-cs-02 ath11k-firmware-qcn9074
+	IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-rootfs | append-metadata
+endef
+TARGET_DEVICES += jdcloud_re-cs-02
+
+define Device/jdcloud_re-cs-07
+	$(call Device/FitImage)
+	$(call Device/EmmcImage)
+	DEVICE_VENDOR := JDCloud
+	DEVICE_MODEL := RE-CS-07
+	KERNEL_SIZE := 6144k
+	SOC := ipq6010
+	DEVICE_DTS_CONFIG := config@cp03-c4
+	DEVICE_PACKAGES := -ath11k-firmware-ipq6018 -ath11k-firmware-qcn9074 -kmod-ath11k -kmod-ath11k-ahb -kmod-ath11k-pci -hostapd-common -wpad-openssl
+	IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-rootfs | append-metadata
+endef
+TARGET_DEVICES += jdcloud_re-cs-07
