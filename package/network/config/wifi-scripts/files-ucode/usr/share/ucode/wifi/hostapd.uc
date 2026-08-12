@@ -14,6 +14,8 @@ import * as fs from 'fs';
 const NL80211_EXT_FEATURE_ENABLE_FTM_RESPONDER = 33;
 const NL80211_EXT_FEATURE_RADAR_BACKGROUND = 61;
 
+const WLAN_CIPHER_SUITE_GCMP_256 = 0x000fac09;
+
 let phy_features = {};
 let phy_capabilities = {};
 
@@ -467,6 +469,8 @@ function device_capabilities(config) {
 
 	phy_capabilities.ht_capa = band.ht_capa ?? 0;
 	phy_capabilities.vht_capa = band.vht_capa ?? 0;
+	phy_capabilities.he_mac_cap = [];
+	phy_capabilities.he_phy_cap = [];
 	for (let iftype in band.iftype_data) {
 		if (!iftype.iftypes.ap)
 			continue;
@@ -476,6 +480,7 @@ function device_capabilities(config) {
 
 	phy_features.ftm_responder = device_extended_features(phy.extended_features, NL80211_EXT_FEATURE_ENABLE_FTM_RESPONDER);
 	phy_features.radar_background = device_extended_features(phy.extended_features, NL80211_EXT_FEATURE_RADAR_BACKGROUND);
+	phy_features.cipher_gcmp256 = WLAN_CIPHER_SUITE_GCMP_256 in (phy.cipher_suites ?? []);
 }
 
 function generate(config) {
